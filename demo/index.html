@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Ionic Charts Demo</title>
+    <style>
+        pre, code, kbd, samp {
+            font-family: 'Fira Mono', 'Consolas', 'Menlo', 'Monaco', 'Liberation Mono', 'Courier New', monospace;
+        }
+        body, input, button, textarea, select {
+            font-family: 'Fira Mono', 'Consolas', 'Menlo', 'Monaco', 'Liberation Mono', 'Courier New', monospace;
+        }
+        #chart {
+            width: 100%;
+            height: 500px;
+        }
+
+        #controls {
+            margin-bottom: 1rem;
+        }
+
+        label, input, button {
+            font-size: 16px;
+        }
+
+        #pairDisplay {
+            margin-top: 0.5rem;
+            font-weight: bold;
+        }
+
+        #errorDisplay {
+            margin-top: 0.5rem;
+            color: red;
+            font-weight: bold;
+        }
+
+        #hotTokensList {
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            max-height: 320px;
+            overflow-y: auto;
+            display: none;
+            border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            min-width: 280px;
+            min-height: 70px;
+            transition: min-width 0.15s, min-height 0.15s;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        #hotTokensList h3 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1.1rem;
+            color: #333;
+            text-align: left;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
+
+        #hotTokensList ul {
+            margin: 0;
+            padding: 0;
+            list-style: none;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        #hotTokensList li {
+            display: flex;
+            align-items: center;
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 0.35rem 0.8rem;
+            margin: 0;
+            font-size: 15px;
+            font-family: 'Fira Mono', 'Consolas', monospace;
+            color: #222;
+            cursor: pointer;
+            transition: background 0.15s, color 0.15s;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+            min-width: 110px;
+            min-height: 2.1em;
+            box-sizing: border-box;
+        }
+
+        #hotTokensList li:hover {
+            background: #e6f2ff;
+            border: 1px solid #3399ff;
+            color: #0056b3;
+            box-shadow: 0 1px 2px rgba(51,153,255,0.08);
+        }
+
+        /* Add a green background for the special hot token */
+        #hotTokensList li.green-hot-token {
+            background: #d2f8d2 !important;
+            border: 1px solid #3bb143 !important;
+            color: #155724 !important;
+        }
+        #hotTokensList li.green-hot-token:hover {
+            background: #b6f2b6 !important;
+            border: 1px solid #2e8b2e !important;
+            color: #0b3d0b !important;
+        }
+
+        #hotTokensList .no-tokens,
+        #hotTokensList .error-msg {
+            color: #b00;
+            font-size: 1rem;
+            padding: 0.5rem 0;
+            text-align: center;
+            width: 100%;
+        }
+
+        /* Transaction Table Styles */
+        .live-tx-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            margin-top: 0.5em;
+            font-family: 'Fira Mono', 'Consolas', monospace;
+        }
+        .live-tx-table th, .live-tx-table td {
+            padding: 0.3em 0.4em;
+            text-align: left;
+            font-size: 0.98em;
+        }
+        .live-tx-table th {
+            background: #f3f3f3;
+            color: #555;
+            font-weight: 600;
+            border-bottom: 1px solid #e0e0e0;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        .live-tx-table tr.transaction {
+            background: #fff;
+        }
+        .live-tx-table tr.transaction:nth-child(even) {
+            background: #fafbfc;
+        }
+        .live-tx-table .tx-buy {
+            color: #0a7b2e;
+            font-weight: bold;
+        }
+        .live-tx-table .tx-sell {
+            color: #b00;
+            font-weight: bold;
+        }
+        .live-tx-table .no-tx {
+            text-align: center;
+            color: #888;
+            font-style: italic;
+        }
+        .live-tx-table .tx-id {
+            font-size: 0.95em;
+            color: #555;
+            cursor: pointer;
+        }
+        .live-tx-table .tx-id[title]:hover {
+            text-decoration: underline dotted;
+        }
+        .live-tx-table .tx-platform,
+        .live-tx-table .tx-protocol {
+            font-size: 0.95em;
+            color: #444;
+        }
+        /* Responsive: horizontal scroll on small screens */
+        .live-tx-table-wrapper {
+            overflow-x: auto;
+            width: 100%;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css?family=Fira+Mono:400,500&display=swap" rel="stylesheet">
+</head>
+<body>
+<h2>Ionic Charts Demo</h2>
+<div id="controls">
+    <div id="hotTokensList"></div>
+    <div id="pairDisplay"></div>
+    <div id="errorDisplay"></div>
+</div>
+<div id="chart"></div>
+<div id="liveTransactions">
+    <h3>Live Transactions</h3>
+    <div class="live-tx-table-wrapper">
+        <table class="live-tx-table" id="liveTransactionsTable">
+            <thead>
+                <tr>
+                    <th class="tx-time">Time</th>
+                    <th class="tx-mcap">Mcap</th>
+                    <th class="tx-side">Side</th>
+                    <th class="tx-amount">Amount</th>
+                    <th class="tx-id">TxID</th>
+                    <th class="tx-platform">Platform</th>
+                    <th class="tx-protocol">Protocol</th>
+                </tr>
+            </thead>
+            <tbody id="liveTransactionsList">
+                <tr class="no-tx"><td colspan="7">No transactions yet.</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+    let chart, candleSeries, ws;
+    let candles = {};
+    let currentPair = "";
+    let currentHost = "";
+
+    // Live transactions state
+    const MAX_LIVE_TX = 100;
+    let liveTransactions = [];
+
+    // Auto-reconnect state
+    let reconnectTimeout = null;
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_ATTEMPTS = 10;
+    const RECONNECT_BASE_DELAY = 1000; // ms
+
+    function getDefaultHost() {
+        let loc = window.location;
+        let defaultHost = loc.hostname;
+        if (loc.port) {
+            defaultHost += ":" + loc.port;
+        }
+        return defaultHost;
+    }
+
+    function createChart() {
+        if (chart) {
+            chart.remove();
+        }
+        const chartElement = document.getElementById('chart');
+        chart = LightweightCharts.createChart(chartElement, {
+            layout: {
+                background: {color: '#ffffff'},
+                textColor: '#000',
+            },
+            grid: {
+                vertLines: {color: '#eee'},
+                horzLines: {color: '#eee'},
+            },
+            timeScale: {timeVisible: true, secondsVisible: true},
+        });
+        candleSeries = chart.addCandlestickSeries();
+    }
+
+    async function fetchAndFillOldCandles() {
+        candles = {};
+        base_token = currentPair.split("_")[0];
+        let url = `/api/v1/chart?base_token=${base_token}&quote_token=So11111111111111111111111111111111111111112`;
+        try {
+            const resp = await fetch(url);
+            if (!resp.ok) {
+                throw new Error("Failed to fetch chart data: " + resp.statusText);
+            }
+            const data = await resp.json();
+            if (!Array.isArray(data)) {
+                throw new Error("Chart data is not an array");
+            }
+            data.forEach(row => {
+                if (!Array.isArray(row) || row.length < 5) return;
+                let t = row[0];
+                candles[t] = {
+                    time: t,
+                    open: parseFloat(row[1]),
+                    high: parseFloat(row[2]),
+                    low: parseFloat(row[3]),
+                    close: parseFloat(row[4]),
+                };
+            });
+            const sortedCandles = Object.values(candles).sort((a, b) => a.time - b.time);
+            candleSeries.setData(sortedCandles);
+        } catch (err) {
+            console.error("Error fetching old candles:", err);
+            const errorDisplay = document.getElementById('errorDisplay');
+            if (errorDisplay) {
+                errorDisplay.textContent = "Error loading chart history: " + err.message;
+            }
+        }
+    }
+
+    function roundTo15Sec(ts) {
+        return Math.floor(ts / 15) * 15;
+    }
+
+    function updateChart(ts, price) {
+        const roundedTime = roundTo15Sec(ts);
+        const candle = candles[roundedTime];
+        if (!candle) {
+            const timestamps = Object.keys(candles).sort();
+            if (timestamps.length > 0) {
+                last_candle = candles[timestamps[timestamps.length - 1]]
+                candles[roundedTime] = {
+                    time: roundedTime,
+                    open: last_candle["close"],
+                    high: price,
+                    low: price,
+                    close: price,
+                };
+            } else {
+                candles[roundedTime] = {
+                    time: roundedTime,
+                    open: price,
+                    high: price,
+                    low: price,
+                    close: price,
+                };
+            }
+        } else {
+            candle.high = Math.max(candle.high, price);
+            candle.low = Math.min(candle.low, price);
+            candle.close = price;
+        }
+        candleSeries.update(candles[roundedTime]);
+    }
+
+    // --- Live Transactions UI ---
+    function renderLiveTransactions() {
+        const tbody = document.getElementById('liveTransactionsList');
+        tbody.innerHTML = '';
+        if (!liveTransactions.length) {
+            tbody.innerHTML = '<tr class="no-tx"><td colspan="7">No transactions yet.</td></tr>';
+            return;
+        }
+        
+        for (const tx of liveTransactions) {
+            const tr = document.createElement('tr');
+            tr.classList.add('transaction');
+            const date = new Date(tx.timestamp * 1000);
+            const timeStr = date.toLocaleTimeString([], {hour12: false});
+            const mcapStr = (typeof tx.mcap === "number" && !isNaN(tx.mcap)) ? tx.mcap.toLocaleString(undefined, {maximumFractionDigits: 0}) + " SOL" : "-";
+            const amountStr = (typeof tx.amount === "number" && !isNaN(tx.amount)) ? tx.amount.toLocaleString(undefined, {maximumFractionDigits: 4}) + " SOL" : "-";
+            const sideClass = tx.side ? "tx-buy" : "tx-sell";
+            const sideText = tx.side ? "Buy" : "Sell";
+            const txidShort = tx.txid ? (tx.txid.length > 10 ? tx.txid.slice(0, 6) + "..." + tx.txid.slice(-4) : tx.txid) : "";
+            tr.innerHTML = `
+                <td class="tx-time">${timeStr}</td>
+                <td class="tx-mcap">${mcapStr}</td>
+                <td class="${sideClass}">${sideText}</td>
+                <td class="tx-amount">${amountStr}</td>
+                <td class="tx-id" title="${tx.txid || ''}">${txidShort}</td>
+                <td class="tx-platform" title="UI Platform">${tx.ui_platform || '-'}</td>
+                <td class="tx-protocol" title="Protocol">${tx.protocol || '-'}</td>
+            `;
+            // Add click event to tx-id cell to open solscan in new tab
+            const txidCell = tr.querySelector('.tx-id');
+            if (txidCell && tx.txid) {
+                txidCell.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    window.open('https://solscan.io/tx/' + tx.txid, '_blank');
+                });
+                txidCell.style.textDecoration = "underline dotted";
+            }
+            tbody.appendChild(tr);
+        }
+    }
+
+    function addLiveTransaction(tx) {
+        if (tx.pair !== currentPair) return;
+        liveTransactions.unshift(tx);
+        if (liveTransactions.length > MAX_LIVE_TX) {
+            liveTransactions.length = MAX_LIVE_TX;
+        }
+        renderLiveTransactions();
+    }
+
+    function clearLiveTransactions() {
+        liveTransactions = [];
+        renderLiveTransactions();
+    }
+
+    let ws_prev = null;
+    let ws_host = null;
+    let ws_is_open = false;
+
+    function openWebSocket(host) {
+        if (ws && ws.readyState !== WebSocket.CLOSED && ws.readyState !== WebSocket.CLOSING) {
+            ws.close();
+        }
+        ws = new WebSocket(`ws://${host}/ws`);
+        ws_host = host;
+        ws_is_open = false;
+
+        ws.onopen = async() => {
+            ws_is_open = true;
+            reconnectAttempts = 0;
+            if (reconnectTimeout) {
+                clearTimeout(reconnectTimeout);
+                reconnectTimeout = null;
+            }
+            document.getElementById("errorDisplay").textContent = "";
+            document.getElementById("pairDisplay").textContent = ws_host ? `Connected to ${ws_host}` : "";
+        };
+
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === "trade" && data.pair === currentPair) {
+                    document.getElementById("errorDisplay").textContent = "";
+                    document.getElementById("pairDisplay").textContent = `Connected to ${currentPair.replace("_So11111111111111111111111111111111111111112", "")} @ ${ws_host}`;
+                    const ts = data.timestamp;
+                    const price = parseFloat(data.base_mcap);
+                    if (!isNaN(price)) {
+                        updateChart(ts, price);
+                    }
+                    addLiveTransaction({
+                        timestamp: data.timestamp,
+                        mcap: parseFloat(data.base_mcap),
+                        amount: data.mint_in == 'So11111111111111111111111111111111111111112' ? parseFloat(data.tokens_in) : parseFloat(data.tokens_out),
+                        side: data.mint_in == 'So11111111111111111111111111111111111111112',
+                        ui_platform: data.ui_platform,
+                        protocol: data.protocol,
+                        txid: data.main_signature,
+                        pair: data.pair
+                    });
+                }
+            } catch (err) {
+                console.error("Invalid message:", event.data, err);
+                document.getElementById("errorDisplay").textContent = "Error: Invalid message format";
+            }
+        };
+
+        ws.onerror = (err) => {
+            console.error("WebSocket error", err);
+            document.getElementById("errorDisplay").textContent = "Connection error occurred";
+        };
+
+        ws.onclose = (event) => {
+            ws_is_open = false;
+            console.log("WebSocket closed", event.code, event.reason);
+            if (event.code === 4003) {
+                document.getElementById("errorDisplay").textContent = "Invalid API key";
+            } else if (event.code === 1000 || event.code === 1005) {
+                // Normal closure, do nothing
+            } else {
+                document.getElementById("errorDisplay").textContent = "Connection closed unexpectedly";
+                document.getElementById("pairDisplay").textContent = "";
+                if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                    reconnectAttempts += 1;
+                    const delay = Math.min(RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttempts - 1), 30000);
+                    document.getElementById("errorDisplay").textContent = `Connection lost. Reconnecting in ${Math.round(delay/1000)}s... (Attempt ${reconnectAttempts})`;
+                    reconnectTimeout = setTimeout(() => {
+                        openWebSocket(ws_host);
+                        if (currentPair) {
+                            setTimeout(() => {
+                                if (ws && ws.readyState === WebSocket.OPEN) {
+                                    ws.send(JSON.stringify({
+                                        "action": "pair_subscribe",
+                                        "pair": currentPair
+                                    }));
+                                }
+                            }, 500);
+                        }
+                    }, delay);
+                } else {
+                    document.getElementById("errorDisplay").textContent = "Failed to reconnect after multiple attempts.";
+                }
+            }
+        };
+    }
+
+    async function subscribeToPair(pair) {
+        const host = getDefaultHost();
+        if (host !== ws_host || !ws || ws.readyState !== WebSocket.OPEN) {
+            ws_host = host;
+            openWebSocket(host);
+        }
+        currentPair = pair + "_So11111111111111111111111111111111111111112";
+        candles = {};
+        createChart();
+        clearLiveTransactions();
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            await fetchAndFillOldCandles();
+            ws.send(JSON.stringify({
+                "action": "pair_subscribe",
+                "pair": currentPair
+            }));
+            document.getElementById("pairDisplay").textContent = `Connecting to ${pair} @ ${host}...`;
+        } else {
+            document.getElementById("pairDisplay").textContent = `Connecting to ${pair} @ ${host}...`;
+        }
+    }
+
+    const hotTokensList = document.getElementById("hotTokensList");
+
+    async function loadHotTokensAndShow() {
+        hotTokensList.style.display = "none";
+        hotTokensList.innerHTML = "";
+
+        try {
+            const resp = await fetch(`/api/v1/hot_tokens`);
+            if (!resp.ok) throw new Error("Error loading hot tokens");
+            const tokens = await resp.json();
+
+            if (Array.isArray(tokens) && tokens.length > 0) {
+                const title = document.createElement("h3");
+                title.textContent = "🔥 Hot Tokens";
+                hotTokensList.appendChild(title);
+
+                const ul = document.createElement("ul");
+                tokens.forEach(token => {
+                    const li = document.createElement("li");
+                    let displayToken = token;
+                    if (token.length > 16) {
+                        displayToken = token.slice(0, 8) + "..." + token.slice(-4);
+                    }
+                    li.textContent = displayToken;
+                    li.title = token;
+                    // If the token is the special one, add a green class
+                    if (token === '6AJcP7wuLwmRYLBNbi825wgguaPsWzPBEHcHndpRpump') {
+                        li.classList.add('green-hot-token');
+                    }
+                    li.addEventListener("click", async() => {
+                        await subscribeToPair(token);
+                    });
+                    ul.appendChild(li);
+                });
+                hotTokensList.appendChild(ul);
+                hotTokensList.style.display = "block";
+            } else {
+                hotTokensList.innerHTML = `<div class="no-tokens">No hot tokens found.</div>`;
+                hotTokensList.style.display = "block";
+            }
+        } catch (err) {
+            hotTokensList.innerHTML = `<div class="error-msg">${err.message}</div>`;
+            hotTokensList.style.display = "block";
+        }
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+        const host = getDefaultHost();
+        openWebSocket(host);
+        loadHotTokensAndShow();
+        renderLiveTransactions();
+    });
+</script>
+</body>
+</html>
