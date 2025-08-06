@@ -283,6 +283,7 @@
     let candles = {};
     let currentPair = "";
     let currentHost = "";
+    const SOL_ADDR = "So11111111111111111111111111111111111111112"
 
     // Live transactions state
     const MAX_LIVE_TX = 100;
@@ -344,8 +345,9 @@
 
     async function fetchAndFillOldCandles() {
         candles = {};
-        base_token = currentPair.split("_")[0];
-        let url = `/api/v1/chart?base_token=${base_token}&quote_token=So11111111111111111111111111111111111111112`;
+        pair_split = currentPair.split("_")
+        base_token = pair_split[0] != SOL_ADDR ? pair_split[0] : pair_split[1];
+        let url = `/api/v1/chart?base_token=${base_token}&quote_token=${SOL_ADDR}`;
         try {
             const resp = await fetch(url);
             if (!resp.ok) {
@@ -498,17 +500,20 @@
                     const data = JSON.parse(event.data);
                     if (data.type === "trade" && data.pair === currentPair) {
                         document.getElementById("errorDisplay").textContent = "";
-                        document.getElementById("pairDisplay").textContent = `Connected to ${currentPair.replace("_So11111111111111111111111111111111111111112", "")} @ ${ws_host}`;
+                        document.getElementById("pairDisplay").textContent = `Connected to ${currentPair} @ ${ws_host}`;
                         const ts = data.timestamp;
-                        const price = parseFloat(data.base_mcap);
+                        let pair_split = currentPair.split("_")
+                        const price = pair_split[0] === SOL_ADDR ? parseFloat(data.quote_mcap) : parseFloat(data.base_mcap);
+
                         if (!isNaN(price)) {
                             updateChart(ts, price);
                         }
+
                         addLiveTransaction({
                             timestamp: data.timestamp,
-                            mcap: parseFloat(data.base_mcap),
-                            amount: data.mint_in === 'So11111111111111111111111111111111111111112' ? parseFloat(data.tokens_in) : parseFloat(data.tokens_out),
-                            side: data.mint_in === 'So11111111111111111111111111111111111111112',
+                            mcap: parseFloat(price),
+                            amount: data.mint_in === SOL_ADDR ? parseFloat(data.tokens_in) : parseFloat(data.tokens_out),
+                            side: data.mint_in === SOL_ADDR,
                             ui_platform: data.ui_platform,
                             protocol: data.protocol,
                             txid: data.main_signature,
@@ -564,13 +569,13 @@
         }
     }
 
-    async function subscribeToPair(pair) {
+    async function subscribeToPair(mint) {
         const host = getDefaultHost();
         if (host !== ws_host || !ws || ws.readyState !== WebSocket.OPEN) {
             ws_host = host;
             openWebSocket(host);
         }
-        currentPair = pair + "_So11111111111111111111111111111111111111112";
+        currentPair = mint < SOL_ADDR ? `${mint}_${SOL_ADDR}` : `${SOL_ADDR}_${mint}`;
         candles = {};
         createChart();
         clearLiveTransactions();
@@ -580,9 +585,9 @@
                 "action": "pair_subscribe",
                 "pair": currentPair
             }));
-            document.getElementById("pairDisplay").textContent = `Connecting to ${pair} @ ${host}...`;
+            document.getElementById("pairDisplay").textContent = `Connecting to ${mint} @ ${host}...`;
         } else {
-            document.getElementById("pairDisplay").textContent = `Connecting to ${pair} @ ${host}...`;
+            document.getElementById("pairDisplay").textContent = `Connecting to ${mint} @ ${host}...`;
         }
     }
 
