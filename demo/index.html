@@ -294,6 +294,26 @@
     const MAX_RECONNECT_ATTEMPTS = 10;
     const RECONNECT_BASE_DELAY = 1000; // ms
 
+    function updateURL(tokenAddress) {
+        const url = new URL(window.location);
+        if (tokenAddress) {
+            url.searchParams.set('token', tokenAddress);
+        } else {
+            url.searchParams.delete('token');
+        }
+        window.history.replaceState({}, '', url);
+    }
+
+    function validateTokenAddress(address) {
+        // Basic validation for Solana token addresses
+        return address && address.length >= 32 && address.length <= 44 && /^[A-Za-z0-9]+$/.test(address);
+    }
+
+    function getTokenFromURL() {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get('token');
+    }
+
     function getDefaultHost() {
         let loc = window.location;
         let defaultHost = loc.hostname;
@@ -455,86 +475,93 @@
         if (ws && ws.readyState !== WebSocket.CLOSED && ws.readyState !== WebSocket.CLOSING) {
             ws.close();
         }
-        ws = new WebSocket(`ws://${host}/ws`);
-        ws_host = host;
-        ws_is_open = false;
-
-        ws.onopen = async() => {
-            ws_is_open = true;
-            reconnectAttempts = 0;
-            if (reconnectTimeout) {
-                clearTimeout(reconnectTimeout);
-                reconnectTimeout = null;
-            }
-            document.getElementById("errorDisplay").textContent = "";
-            document.getElementById("pairDisplay").textContent = ws_host ? `Connected to ${ws_host}` : "";
-        };
-
-        ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.type === "trade" && data.pair === currentPair) {
-                    document.getElementById("errorDisplay").textContent = "";
-                    document.getElementById("pairDisplay").textContent = `Connected to ${currentPair.replace("_So11111111111111111111111111111111111111112", "")} @ ${ws_host}`;
-                    const ts = data.timestamp;
-                    const price = parseFloat(data.base_mcap);
-                    if (!isNaN(price)) {
-                        updateChart(ts, price);
-                    }
-                    addLiveTransaction({
-                        timestamp: data.timestamp,
-                        mcap: parseFloat(data.base_mcap),
-                        amount: data.mint_in === 'So11111111111111111111111111111111111111112' ? parseFloat(data.tokens_in) : parseFloat(data.tokens_out),
-                        side: data.mint_in === 'So11111111111111111111111111111111111111112',
-                        ui_platform: data.ui_platform,
-                        protocol: data.protocol,
-                        txid: data.main_signature,
-                        pair: data.pair
-                    });
-                }
-            } catch (err) {
-                console.error("Invalid message:", event.data, err);
-                document.getElementById("errorDisplay").textContent = "Error: Invalid message format";
-            }
-        };
-
-        ws.onerror = (err) => {
-            console.error("WebSocket error", err);
-            document.getElementById("errorDisplay").textContent = "Connection error occurred";
-        };
-
-        ws.onclose = (event) => {
+        
+        try {
+            ws = new WebSocket(`ws://${host}/ws`);
+            ws_host = host;
             ws_is_open = false;
-            console.log("WebSocket closed", event.code, event.reason);
-            if (event.code === 4003) {
-                document.getElementById("errorDisplay").textContent = "Invalid API key";
-            } else if (event.code === 1000 || event.code === 1005) {
-                // Normal closure, do nothing
-            } else {
-                document.getElementById("errorDisplay").textContent = "Connection closed unexpectedly";
-                document.getElementById("pairDisplay").textContent = "";
-                if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-                    reconnectAttempts += 1;
-                    const delay = Math.min(RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttempts - 1), 30000);
-                    document.getElementById("errorDisplay").textContent = `Connection lost. Reconnecting in ${Math.round(delay/1000)}s... (Attempt ${reconnectAttempts})`;
-                    reconnectTimeout = setTimeout(() => {
-                        openWebSocket(ws_host);
-                        if (currentPair) {
-                            setTimeout(() => {
-                                if (ws && ws.readyState === WebSocket.OPEN) {
-                                    ws.send(JSON.stringify({
-                                        "action": "pair_subscribe",
-                                        "pair": currentPair
-                                    }));
-                                }
-                            }, 500);
-                        }
-                    }, delay);
-                } else {
-                    document.getElementById("errorDisplay").textContent = "Failed to reconnect after multiple attempts.";
+
+            ws.onopen = async() => {
+                ws_is_open = true;
+                reconnectAttempts = 0;
+                if (reconnectTimeout) {
+                    clearTimeout(reconnectTimeout);
+                    reconnectTimeout = null;
                 }
-            }
-        };
+                document.getElementById("errorDisplay").textContent = "";
+                document.getElementById("pairDisplay").textContent = ws_host ? `Connected to ${ws_host}` : "";
+                console.log("WebSocket connected successfully");
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === "trade" && data.pair === currentPair) {
+                        document.getElementById("errorDisplay").textContent = "";
+                        document.getElementById("pairDisplay").textContent = `Connected to ${currentPair.replace("_So11111111111111111111111111111111111111112", "")} @ ${ws_host}`;
+                        const ts = data.timestamp;
+                        const price = parseFloat(data.base_mcap);
+                        if (!isNaN(price)) {
+                            updateChart(ts, price);
+                        }
+                        addLiveTransaction({
+                            timestamp: data.timestamp,
+                            mcap: parseFloat(data.base_mcap),
+                            amount: data.mint_in === 'So11111111111111111111111111111111111111112' ? parseFloat(data.tokens_in) : parseFloat(data.tokens_out),
+                            side: data.mint_in === 'So11111111111111111111111111111111111111112',
+                            ui_platform: data.ui_platform,
+                            protocol: data.protocol,
+                            txid: data.main_signature,
+                            pair: data.pair
+                        });
+                    }
+                } catch (err) {
+                    console.error("Invalid message:", event.data, err);
+                    document.getElementById("errorDisplay").textContent = "Error: Invalid message format";
+                }
+            };
+
+            ws.onerror = (err) => {
+                console.error("WebSocket error", err);
+                document.getElementById("errorDisplay").textContent = "Connection error occurred";
+            };
+
+            ws.onclose = (event) => {
+                ws_is_open = false;
+                console.log("WebSocket closed", event.code, event.reason);
+                if (event.code === 4003) {
+                    document.getElementById("errorDisplay").textContent = "Invalid API key";
+                } else if (event.code === 1000 || event.code === 1005) {
+                    // Normal closure, do nothing
+                } else {
+                    document.getElementById("errorDisplay").textContent = "Connection closed unexpectedly";
+                    document.getElementById("pairDisplay").textContent = "";
+                    if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                        reconnectAttempts += 1;
+                        const delay = Math.min(RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttempts - 1), 30000);
+                        document.getElementById("errorDisplay").textContent = `Connection lost. Reconnecting in ${Math.round(delay/1000)}s... (Attempt ${reconnectAttempts})`;
+                        reconnectTimeout = setTimeout(() => {
+                            openWebSocket(ws_host);
+                            if (currentPair) {
+                                setTimeout(() => {
+                                    if (ws && ws.readyState === WebSocket.OPEN) {
+                                        ws.send(JSON.stringify({
+                                            "action": "pair_subscribe",
+                                            "pair": currentPair
+                                        }));
+                                    }
+                                }, 500);
+                            }
+                        }, delay);
+                    } else {
+                        document.getElementById("errorDisplay").textContent = "Failed to reconnect after multiple attempts.";
+                    }
+                }
+            };
+        } catch (err) {
+            console.error("Failed to create WebSocket connection:", err);
+            document.getElementById("errorDisplay").textContent = "Failed to create WebSocket connection";
+        }
     }
 
     async function subscribeToPair(pair) {
@@ -589,7 +616,10 @@
                         li.classList.add('green-hot-token');
                     }
                     li.addEventListener("click", async() => {
+                        console.log("Hot token clicked:", token);
                         await subscribeToPair(token);
+                        updateURL(token);
+                        console.log("URL updated for hot token:", token);
                     });
                     ul.appendChild(li);
                 });
@@ -605,56 +635,84 @@
         }
     }
 
+    async function loadTokenFromURL() {
+        const tokenFromURL = getTokenFromURL();
+        if (tokenFromURL && validateTokenAddress(tokenFromURL)) {
+            console.log("Loading token from URL:", tokenFromURL);
+            // Set the input value
+            const tokenInput = document.getElementById('tokenInput');
+            if (tokenInput) {
+                tokenInput.value = tokenFromURL;
+                // Load the token
+                await loadCustomToken();
+            } else {
+                console.error("Token input element not found");
+            }
+        } else if (tokenFromURL) {
+            console.warn("Invalid token in URL:", tokenFromURL);
+        }
+    }
+
+    async function loadCustomToken() {
+        const tokenInput = document.getElementById('tokenInput');
+        const loadTokenBtn = document.getElementById('loadTokenBtn');
+        const tokenAddress = tokenInput.value.trim();
+        
+        console.log("loadCustomToken called with address:", tokenAddress);
+        
+        if (!tokenAddress) {
+            document.getElementById('errorDisplay').textContent = "Please enter a token address";
+            return;
+        }
+        
+        if (!validateTokenAddress(tokenAddress)) {
+            document.getElementById('errorDisplay').textContent = "Invalid token address format";
+            return;
+        }
+        
+        // Disable button and show loading state
+        loadTokenBtn.disabled = true;
+        loadTokenBtn.textContent = "Loading...";
+        document.getElementById('errorDisplay').textContent = "";
+        
+        try {
+            console.log("Subscribing to pair:", tokenAddress);
+            await subscribeToPair(tokenAddress);
+            document.getElementById('errorDisplay').textContent = "";
+            // Clear input and show success message
+            tokenInput.value = "";
+            const shortAddress = tokenAddress.length > 16 ? 
+                tokenAddress.slice(0, 8) + "..." + tokenAddress.slice(-4) : 
+                tokenAddress;
+            document.getElementById('pairDisplay').textContent = `Successfully loaded ${shortAddress}`;
+            // Update URL with the token
+            updateURL(tokenAddress);
+            console.log("Successfully loaded token:", tokenAddress);
+        } catch (err) {
+            console.error("Error loading token:", err);
+            document.getElementById('errorDisplay').textContent = "Error loading token: " + err.message;
+        } finally {
+            // Re-enable button
+            loadTokenBtn.disabled = false;
+            loadTokenBtn.textContent = "Load Chart";
+        }
+    }
+
+    // Initialize everything when DOM is loaded
     window.addEventListener("DOMContentLoaded", () => {
         const host = getDefaultHost();
-        openWebSocket(host);
+        
+        // Delay WebSocket connection slightly to ensure server is ready
+        setTimeout(() => {
+            openWebSocket(host);
+        }, 100);
+        
         loadHotTokensAndShow();
         renderLiveTransactions();
         
         // Add token input functionality
         const tokenInput = document.getElementById('tokenInput');
         const loadTokenBtn = document.getElementById('loadTokenBtn');
-        
-        function validateTokenAddress(address) {
-            // Basic validation for Solana token addresses
-            return address && address.length >= 32 && address.length <= 44 && /^[A-Za-z0-9]+$/.test(address);
-        }
-        
-        async function loadCustomToken() {
-            const tokenAddress = tokenInput.value.trim();
-            
-            if (!tokenAddress) {
-                document.getElementById('errorDisplay').textContent = "Please enter a token address";
-                return;
-            }
-            
-            if (!validateTokenAddress(tokenAddress)) {
-                document.getElementById('errorDisplay').textContent = "Invalid token address format";
-                return;
-            }
-            
-            // Disable button and show loading state
-            loadTokenBtn.disabled = true;
-            loadTokenBtn.textContent = "Loading...";
-            document.getElementById('errorDisplay').textContent = "";
-            
-            try {
-                await subscribeToPair(tokenAddress);
-                document.getElementById('errorDisplay').textContent = "";
-                // Clear input and show success message
-                tokenInput.value = "";
-                const shortAddress = tokenAddress.length > 16 ? 
-                    tokenAddress.slice(0, 8) + "..." + tokenAddress.slice(-4) : 
-                    tokenAddress;
-                document.getElementById('pairDisplay').textContent = `Successfully loaded ${shortAddress}`;
-            } catch (err) {
-                document.getElementById('errorDisplay').textContent = "Error loading token: " + err.message;
-            } finally {
-                // Re-enable button
-                loadTokenBtn.disabled = false;
-                loadTokenBtn.textContent = "Load Chart";
-            }
-        }
         
         // Handle button click
         loadTokenBtn.addEventListener('click', loadCustomToken);
@@ -672,6 +730,15 @@
                 document.getElementById('errorDisplay').textContent = "";
             }
         });
+        
+        // Load token from URL on page load - delay slightly to ensure everything is ready
+        setTimeout(async () => {
+            try {
+                await loadTokenFromURL();
+            } catch (err) {
+                console.error("Error loading token from URL:", err);
+            }
+        }, 200);
     });
 </script>
 </body>
