@@ -35,6 +35,66 @@
             font-weight: bold;
         }
 
+        #tokenInput {
+            margin-top: 0;
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+            width: 300px;
+            font-family: 'Fira Mono', 'Consolas', monospace;
+            height: 40px;
+            box-sizing: border-box;
+        }
+
+        #tokenInput:focus {
+            outline: none;
+            border-color: #3399ff;
+            box-shadow: 0 0 0 2px rgba(51, 153, 255, 0.2);
+        }
+
+        #loadTokenBtn {
+            margin-left: 0;
+            padding: 0.5rem 1rem;
+            background: #3399ff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            font-family: 'Fira Mono', 'Consolas', monospace;
+            height: 40px;
+            box-sizing: border-box;
+        }
+
+        #loadTokenBtn:hover {
+            background: #2980b9;
+        }
+
+        #loadTokenBtn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .title-section {
+            display: flex;
+            align-items: center;
+        }
+
+        .input-section {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-right: 2rem;
+        }
+
         #hotTokensList {
             margin-top: 0.5rem;
             padding: 0.5rem;
@@ -180,7 +240,15 @@
     <link href="https://fonts.googleapis.com/css?family=Fira+Mono:400,500&display=swap" rel="stylesheet">
 </head>
 <body>
-<h2>Ionic Charts Demo</h2>
+<div class="header-container">
+    <div class="title-section">
+        <h2>Ionic Charts Demo</h2>
+    </div>
+    <div class="input-section">
+        <input type="text" id="tokenInput" placeholder="Enter token address (e.g., 6AJcP7wuLwmRYLBNbi825wgguaPsWzPBEHcHndpRpump)" />
+        <button id="loadTokenBtn">Load Chart</button>
+    </div>
+</div>
 <div id="controls">
     <div id="hotTokensList"></div>
     <div id="pairDisplay"></div>
@@ -289,12 +357,12 @@
         }
     }
 
-    function roundTo15Sec(ts) {
-        return Math.floor(ts / 15) * 15;
+    function roundTo1Sec(ts) {
+        return ts;
     }
 
     function updateChart(ts, price) {
-        const roundedTime = roundTo15Sec(ts);
+        const roundedTime = roundTo1Sec(ts);
         const candle = candles[roundedTime];
         if (!candle) {
             const timestamps = Object.keys(candles).sort();
@@ -416,8 +484,8 @@
                     addLiveTransaction({
                         timestamp: data.timestamp,
                         mcap: parseFloat(data.base_mcap),
-                        amount: data.mint_in == 'So11111111111111111111111111111111111111112' ? parseFloat(data.tokens_in) : parseFloat(data.tokens_out),
-                        side: data.mint_in == 'So11111111111111111111111111111111111111112',
+                        amount: data.mint_in === 'So11111111111111111111111111111111111111112' ? parseFloat(data.tokens_in) : parseFloat(data.tokens_out),
+                        side: data.mint_in === 'So11111111111111111111111111111111111111112',
                         ui_platform: data.ui_platform,
                         protocol: data.protocol,
                         txid: data.main_signature,
@@ -542,6 +610,68 @@
         openWebSocket(host);
         loadHotTokensAndShow();
         renderLiveTransactions();
+        
+        // Add token input functionality
+        const tokenInput = document.getElementById('tokenInput');
+        const loadTokenBtn = document.getElementById('loadTokenBtn');
+        
+        function validateTokenAddress(address) {
+            // Basic validation for Solana token addresses
+            return address && address.length >= 32 && address.length <= 44 && /^[A-Za-z0-9]+$/.test(address);
+        }
+        
+        async function loadCustomToken() {
+            const tokenAddress = tokenInput.value.trim();
+            
+            if (!tokenAddress) {
+                document.getElementById('errorDisplay').textContent = "Please enter a token address";
+                return;
+            }
+            
+            if (!validateTokenAddress(tokenAddress)) {
+                document.getElementById('errorDisplay').textContent = "Invalid token address format";
+                return;
+            }
+            
+            // Disable button and show loading state
+            loadTokenBtn.disabled = true;
+            loadTokenBtn.textContent = "Loading...";
+            document.getElementById('errorDisplay').textContent = "";
+            
+            try {
+                await subscribeToPair(tokenAddress);
+                document.getElementById('errorDisplay').textContent = "";
+                // Clear input and show success message
+                tokenInput.value = "";
+                const shortAddress = tokenAddress.length > 16 ? 
+                    tokenAddress.slice(0, 8) + "..." + tokenAddress.slice(-4) : 
+                    tokenAddress;
+                document.getElementById('pairDisplay').textContent = `Successfully loaded ${shortAddress}`;
+            } catch (err) {
+                document.getElementById('errorDisplay').textContent = "Error loading token: " + err.message;
+            } finally {
+                // Re-enable button
+                loadTokenBtn.disabled = false;
+                loadTokenBtn.textContent = "Load Chart";
+            }
+        }
+        
+        // Handle button click
+        loadTokenBtn.addEventListener('click', loadCustomToken);
+        
+        // Handle Enter key in input
+        tokenInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                loadCustomToken();
+            }
+        });
+        
+        // Clear error when user starts typing
+        tokenInput.addEventListener('input', () => {
+            if (document.getElementById('errorDisplay').textContent.includes('token address')) {
+                document.getElementById('errorDisplay').textContent = "";
+            }
+        });
     });
 </script>
 </body>
