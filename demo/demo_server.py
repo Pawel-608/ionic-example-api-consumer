@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 import msgspec
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from loguru import logger
 from starlette.responses import HTMLResponse
 
@@ -15,8 +15,6 @@ from demo.ionic_data_feed import ionic_data_feed
 from demo.messages import WsMessage, INVALID_MESSAGE, PairSubscribe
 
 pair_to_client = defaultdict(set)
-hot_tokens: set[str] = set()
-hot_tokens_lock = asyncio.Lock()
 
 # Track which pair each websocket is subscribed to
 client_to_pair = {}
@@ -35,29 +33,6 @@ def disconnect_client(ws: WebSocket):
 
     # Remove from client_to_pair as well
     client_to_pair.pop(ws, None)
-
-
-async def update_hot_tokens_periodically():
-    global hot_tokens
-    while True:
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(
-                    f"https://{IONIC_API_HOST}/api/v1/hot_tokens",
-                    headers={"x-api-key": IONIC_API_KEY}
-                )
-                resp.raise_for_status()
-                tokens = set(resp.json())
-                async with hot_tokens_lock:
-                    hot_tokens.clear()
-                    hot_tokens.update(tokens)
-                    hot_tokens.add('6AJcP7wuLwmRYLBNbi825wgguaPsWzPBEHcHndpRpump')
-                    hot_tokens.add('Dz9mQ9NzkBcCsuGPFJ3r1bS4wgqKMHBPiVuniW8Mbonk')
-                    hot_tokens.add('73NhQ8pJPnusH7qkLvXMsG6qwzuFBMqDST65viDkbonk')
-                logger.info(f"Updated hot tokens: {tokens}")
-        except Exception as e:
-            logger.exception(f"Failed to update hot tokens: {e}")
-        await asyncio.sleep(30)
 
 
 async def broadcast_data():
@@ -83,7 +58,6 @@ async def broadcast_data():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     broadcast_task = asyncio.create_task(broadcast_data())
-    hot_tokens_task = asyncio.create_task(update_hot_tokens_periodically())
     logger.info("Started broadcast data and hot tokens update tasks")
 
     yield
@@ -91,16 +65,11 @@ async def lifespan(app: FastAPI):
     logger.info("Cancelling broadcast data and hot tokens update tasks")
 
     broadcast_task.cancel()
-    hot_tokens_task.cancel()
 
     try:
         await broadcast_task
     except asyncio.CancelledError:
         logger.info("Broadcast data task cancelled")
-    try:
-        await hot_tokens_task
-    except asyncio.CancelledError:
-        logger.info("Hot tokens update task cancelled")
 
 
 app = FastAPI(lifespan=lifespan)
@@ -115,8 +84,11 @@ async def read_index():
 
 @app.get("/api/v1/hot_tokens")
 async def hot_tokens_endpoint() -> list[str]:
-    async with hot_tokens_lock:
-        return list(hot_tokens)
+    async with httpx.AsyncClient() as client:
+        return ["6AJcP7wuLwmRYLBNbi825wgguaPsWzPBEHcHndpRpump"] + (await client.get(
+            f"https://{IONIC_API_HOST}/api/v1/hot_tokens",
+            headers={"x-api-key": IONIC_API_KEY}
+        )).json()
 
 
 @app.get("/api/v1/chart")
@@ -126,12 +98,12 @@ async def chart_endpoint(
 ):
     """
     Proxy endpoint to fetch chart data from Ionic API with fixed interval, limit, and to_timestamp (now).
-    Only allows chart for hot tokens.
+    Allows chart for any token address.
     """
 
     IONIC_API_URL = f"https://{IONIC_API_HOST}/api/v1/chart"
 
-    interval = 15
+    interval = 1
     limit = 500
     to_timestamp = int(time.time())
 
@@ -167,16 +139,6 @@ async def websocket_endpoint(websocket: WebSocket):
 
                 match parsed_msg:
                     case PairSubscribe() as pair_subscription:
-                        # Only allow subscription to hot tokens
-                        async with hot_tokens_lock:
-                            if pair_subscription.pair.split("_")[0] not in hot_tokens:
-                                await websocket.send_text(
-                                    msgspec.json.encode(
-                                        {"type": "error", "message": "Subscription only allowed to hot tokens"}
-                                    ).decode()
-                                )
-                                continue
-                        # Unsubscribe from previous pair if any
                         prev_pair = client_to_pair.get(websocket)
                         if prev_pair and websocket in pair_to_client[prev_pair]:
                             pair_to_client[prev_pair].discard(websocket)
