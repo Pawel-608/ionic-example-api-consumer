@@ -10,9 +10,9 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from loguru import logger
 from starlette.responses import HTMLResponse
 
-from demo.const import IONIC_API_HOST, IONIC_API_KEY
-from demo.ionic_data_feed import ionic_data_feed
-from demo.messages import WsMessage, INVALID_MESSAGE, PairSubscribe
+from data_api_demo.const import IONIC_API_HOST, IONIC_API_KEY
+from data_api_demo.ionic_data_feed import ionic_data_feed
+from data_api_demo.messages import WsMessage, INVALID_MESSAGE, PairSubscribe
 
 pair_to_client = defaultdict(set)
 

@@ -5,7 +5,7 @@ import msgspec
 import websockets
 from loguru import logger
 
-from demo.const import IONIC_API_HOST, IONIC_API_KEY
+from data_api_demo.const import IONIC_API_HOST, IONIC_API_KEY
 
 
 class Trade(msgspec.Struct, tag="trade"):
