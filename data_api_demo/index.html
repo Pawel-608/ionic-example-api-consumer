@@ -600,35 +600,78 @@
         try {
             const resp = await fetch(`/api/v1/hot_tokens`);
             if (!resp.ok) throw new Error("Error loading hot tokens");
-            const tokens = await resp.json();
+            let protocols = await resp.json();
 
-            if (Array.isArray(tokens) && tokens.length > 0) {
+            if (Array.isArray(protocols) && protocols.length > 0) {
+                // Sort protocols alphabetically by protocol name
+                protocols = protocols.slice().sort((a, b) => {
+                    if (typeof a.protocol !== "string" || typeof b.protocol !== "string") return 0;
+                    return a.protocol.localeCompare(b.protocol);
+                });
+
                 const title = document.createElement("h3");
                 title.textContent = "🔥 Hot Tokens";
                 hotTokensList.appendChild(title);
 
-                const ul = document.createElement("ul");
-                tokens.forEach(token => {
-                    const li = document.createElement("li");
-                    let displayToken = token;
-                    if (token.length > 16) {
-                        displayToken = token.slice(0, 8) + "..." + token.slice(-4);
+                protocols.forEach(protoGroup => {
+                    if (
+                        typeof protoGroup === "object" &&
+                        protoGroup !== null &&
+                        typeof protoGroup.protocol === "string" &&
+                        Array.isArray(protoGroup.tokens)
+                    ) {
+                        const protoDiv = document.createElement("div");
+                        protoDiv.style.marginBottom = "1em";
+
+                        // Protocol name as subheading
+                        const protoTitle = document.createElement("div");
+                        protoTitle.textContent = protoGroup.protocol;
+                        protoTitle.style.fontWeight = "bold";
+                        protoTitle.style.marginBottom = "0.3em";
+                        protoTitle.style.fontSize = "1.02em";
+                        protoDiv.appendChild(protoTitle);
+
+                        if (protoGroup.tokens.length > 0) {
+                            const ul = document.createElement("ul");
+                            protoGroup.tokens.forEach(token => {
+                                if (typeof token !== "string") return;
+                                const li = document.createElement("li");
+                                let displayToken = token;
+                                if (token.length > 16) {
+                                    displayToken = token.slice(0, 8) + "..." + token.slice(-4);
+                                }
+                                li.textContent = displayToken;
+                                li.title = token;
+                                // If the token is the special one, add a green class
+                                if (token === '6AJcP7wuLwmRYLBNbi825wgguaPsWzPBEHcHndpRpump') {
+                                    li.classList.add('green-hot-token');
+                                }
+                                li.addEventListener("click", async() => {
+                                    console.log("Hot token clicked:", token);
+                                    await subscribeToPair(token);
+                                    updateURL(token);
+                                    console.log("URL updated for hot token:", token);
+                                });
+                                ul.appendChild(li);
+                            });
+                            protoDiv.appendChild(ul);
+                        } else {
+                            const noTokens = document.createElement("div");
+                            noTokens.className = "no-tokens";
+                            noTokens.textContent = "No hot tokens for this protocol.";
+                            protoDiv.appendChild(noTokens);
+                        }
+
+                        hotTokensList.appendChild(protoDiv);
+                    } else {
+                        // fallback: show error for this group
+                        const errDiv = document.createElement("div");
+                        errDiv.className = "error-msg";
+                        errDiv.textContent = "Malformed protocol group in hot tokens response.";
+                        hotTokensList.appendChild(errDiv);
                     }
-                    li.textContent = displayToken;
-                    li.title = token;
-                    // If the token is the special one, add a green class
-                    if (token === '6AJcP7wuLwmRYLBNbi825wgguaPsWzPBEHcHndpRpump') {
-                        li.classList.add('green-hot-token');
-                    }
-                    li.addEventListener("click", async() => {
-                        console.log("Hot token clicked:", token);
-                        await subscribeToPair(token);
-                        updateURL(token);
-                        console.log("URL updated for hot token:", token);
-                    });
-                    ul.appendChild(li);
                 });
-                hotTokensList.appendChild(ul);
+
                 hotTokensList.style.display = "block";
             } else {
                 hotTokensList.innerHTML = `<div class="no-tokens">No hot tokens found.</div>`;

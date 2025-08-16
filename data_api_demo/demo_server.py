@@ -4,6 +4,7 @@ import time
 from collections import defaultdict
 from contextlib import asynccontextmanager
 
+from pydantic import BaseModel
 import httpx
 import msgspec
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -81,11 +82,14 @@ async def read_index():
     html_path = HERE / "index.html"
     return HTMLResponse(html_path.read_text(), status_code=200)
 
+class HotTokensResponse(BaseModel):
+    protocol: str
+    tokens: list[str]
 
 @app.get("/api/v1/hot_tokens")
-async def hot_tokens_endpoint() -> list[str]:
+async def hot_tokens_endpoint() -> list[HotTokensResponse]:
     async with httpx.AsyncClient() as client:
-        return ["6AJcP7wuLwmRYLBNbi825wgguaPsWzPBEHcHndpRpump"] + (await client.get(
+        return (await client.get(
             f"https://{IONIC_API_HOST}/api/v1/hot_tokens",
             headers={"x-api-key": IONIC_API_KEY}
         )).json()

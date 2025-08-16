@@ -28,5 +28,5 @@ and then run
 
 ```bash
 poetry update
-poetry run uvicorn demo.demo_server:app --reload --port 8001
+poetry run uvicorn data_api_demo.demo_server:app --reload --port 8001
 ```
